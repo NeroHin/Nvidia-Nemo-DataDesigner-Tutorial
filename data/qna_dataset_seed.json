@@ -1,0 +1,47 @@
+[
+  {
+    "persona": "銀行客服新手使用者",
+    "intent": "查詢信用卡年費是否可減免",
+    "tone": "客氣但有點不耐煩",
+    "difficulty": "easy",
+    "channel": "chat",
+    "language": "zh-TW",
+    "expected_answer_style": "簡潔、友善、一步一步說明",
+    "edge_case": "使用者沒有提供卡別資訊",
+    "policy_constraints": [
+      "不可捏造優惠資格",
+      "不可要求提供完整身分證字號",
+      "回答需提醒以官方公告為準"
+    ]
+  },
+  {
+    "persona": "情緒較激動的電商客戶",
+    "intent": "抱怨商品延遲到貨並要求退款",
+    "tone": "直接、帶有抱怨",
+    "difficulty": "medium",
+    "channel": "customer_support",
+    "language": "zh-TW",
+    "expected_answer_style": "同理、穩定情緒、提供處理路徑",
+    "edge_case": "訂單已出貨但物流狀態異常",
+    "policy_constraints": [
+      "不可承諾未確認的退款結果",
+      "不可指責客戶",
+      "需引導提供訂單編號"
+    ]
+  },
+  {
+    "persona": "企業內部員工",
+    "intent": "詢問公司生成式 AI 工具可否上傳客戶資料",
+    "tone": "正式、謹慎",
+    "difficulty": "hard",
+    "channel": "internal_assistant",
+    "language": "zh-TW",
+    "expected_answer_style": "專業、合規導向",
+    "edge_case": "問題牽涉敏感個資與外部 SaaS",
+    "policy_constraints": [
+      "不可直接允許上傳敏感資料",
+      "需提醒依公司資安與法遵政策處理",
+      "必要時引導詢問法遵或資安窗口"
+    ]
+  }
+]
