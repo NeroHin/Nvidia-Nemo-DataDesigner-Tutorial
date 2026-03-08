@@ -1,0 +1,26 @@
+[
+    {
+      "topic": "台灣金融業導入生成式 AI 的主要挑戰",
+      "target_audience": "企業架構師與 IT 顧問",
+      "writing_style": "分析型、正式、偏技術部落格",
+      "report_goal": "產出一篇可作為企業內部分享的研究型文章",
+      "language": "zh-TW",
+      "region": "台灣",
+      "expected_length": "1000-1500字",
+      "sections": [
+        "產業背景",
+        "主要挑戰",
+        "技術架構考量",
+        "治理與風險",
+        "導入建議"
+      ],
+      "must_include_keywords": [
+        "資料隱私",
+        "模型治理",
+        "RAG",
+        "Guardrails",
+        "PoC"
+      ],
+      "constraints": ["避免口語化", "不要條列過多", "每一節需有明確小結"]
+    }
+  ]
