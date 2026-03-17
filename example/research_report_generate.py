@@ -291,6 +291,7 @@ builder.add_column(
         name="outline_quality_score",
         model_alias=JUDGE_MODEL_ALIAS,
         prompt=outline_quality_prompt,
+        drop=True,
         scores=[
             dd.Score(
                 name="outline_quality",
@@ -317,6 +318,7 @@ builder.add_column(
         name="section_content_quality_score",
         model_alias=JUDGE_MODEL_ALIAS,
         prompt=section_content_quality_prompt,
+        drop=True,
         scores=[
             dd.Score(
                 name="section_content_quality",
@@ -343,17 +345,62 @@ builder.add_column(
         name="conclusion_quality_score",
         model_alias=JUDGE_MODEL_ALIAS,
         prompt=conclusion_quality_prompt,
+        drop=True,
         scores=[
             dd.Score(
                 name="conclusion_quality",
                 description="Overall quality of the article conclusion: structure completeness, key points clarity",
-
                 options={3: "Excellent", 2: "Good", 1: "Fair", 0: "Poor"},
             ),
         ],
     )
 )
 
+# =========================================
+# 6.1 將 Judge 分數解析成獨立 columns（便於分析與篩選）
+# =========================================
+builder.add_column(
+    dd.ExpressionColumnConfig(
+        name="outline_quality_result",
+        expr="{{ outline_quality_score.outline_quality.score }}",
+        dtype="int",
+    )
+)
+builder.add_column(
+    dd.ExpressionColumnConfig(
+        name="outline_quality_reasoning",
+        expr="{{ outline_quality_score.outline_quality.reasoning }}",
+        dtype="str",
+    )
+)
+builder.add_column(
+    dd.ExpressionColumnConfig(
+        name="section_content_quality_result",
+        expr="{{ section_content_quality_score.section_content_quality.score }}",
+        dtype="int",
+    )
+)
+builder.add_column(
+    dd.ExpressionColumnConfig(
+        name="section_content_quality_reasoning",
+        expr="{{ section_content_quality_score.section_content_quality.reasoning }}",
+        dtype="str",
+    )
+)
+builder.add_column(
+    dd.ExpressionColumnConfig(
+        name="conclusion_quality_result",
+        expr="{{ conclusion_quality_score.conclusion_quality.score }}",
+        dtype="int",
+    )
+)
+builder.add_column(
+    dd.ExpressionColumnConfig(
+        name="conclusion_quality_reasoning",
+        expr="{{ conclusion_quality_score.conclusion_quality.reasoning }}",
+        dtype="str",
+    )
+)
 
 # =========================================
 # 7. 預覽

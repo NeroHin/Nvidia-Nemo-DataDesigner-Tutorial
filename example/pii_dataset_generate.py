@@ -1,16 +1,28 @@
+import json
+from pathlib import Path
+
+import pandas as pd
+
 import data_designer.config as dd
 from data_designer.interface import DataDesigner
 from dotenv import load_dotenv
 
 load_dotenv()
 
+# 輸出目錄：DataDesigner 預設寫入 artifacts/<dataset_name>_<timestamp>/
+ARTIFACTS_DIR = Path(__file__).resolve().parent.parent / "artifacts"
+DATASET_NAME = "pii-guardrails-test-dataset"
+
 # =========================================
 # 1. 設定模型
 # =========================================
 # 生成用：nemotron-nano（快速、成本低）
 MODEL_PROVIDER = "nvidia"
-MODEL_ID = "nvidia/nemotron-3-nano-30b-a3b"
-MODEL_ALIAS = "nemotron-nano-v3"
+# MODEL_ID = "moonshotai/kimi-k2-instruct-0905"
+# MODEL_ALIAS = "kimi-k2-instruct-0905"
+
+MODEL_ID = "thudm/chatglm3-6b"
+MODEL_ALIAS = "chatglm3-6b"
 
 # 評估用 Judge：較大模型以確保評估品質
 JUDGE_MODEL_ALIAS = "qwen-3.5-122b-a10b"
@@ -313,6 +325,7 @@ builder.add_column(
         name="ground_truth_accuracy_score",
         model_alias=JUDGE_MODEL_ALIAS,
         prompt=ground_truth_accuracy_prompt,
+        drop=False,
         scores=[
             dd.Score(
                 name="ground_truth_accuracy",
@@ -359,6 +372,7 @@ builder.add_column(
         name="redaction_quality_score",
         model_alias=JUDGE_MODEL_ALIAS,
         prompt=redaction_quality_prompt,
+        drop=False,
         scores=[
             dd.Score(
                 name="redaction_quality",
@@ -402,6 +416,7 @@ builder.add_column(
         name="document_naturalness_score",
         model_alias=JUDGE_MODEL_ALIAS,
         prompt=document_naturalness_prompt,
+        drop=False, # remove the reasoning output
         scores=[
             dd.Score(
                 name="document_naturalness",
@@ -418,22 +433,175 @@ builder.add_column(
 )
 
 # =========================================
+# 7.1 將 Judge 分數解析成獨立 columns（便於分析與篩選）
+# =========================================
+builder.add_column(
+    dd.ExpressionColumnConfig(
+        name="ground_truth_accuracy_result",
+        expr="{{ ground_truth_accuracy_score.ground_truth_accuracy.score }}",
+        dtype="int",
+    )
+)
+builder.add_column(
+    dd.ExpressionColumnConfig(
+        name="ground_truth_accuracy_reasoning",
+        expr="{{ ground_truth_accuracy_score.ground_truth_accuracy.reasoning }}",
+        dtype="str",
+    )
+)
+builder.add_column(
+    dd.ExpressionColumnConfig(
+        name="redaction_quality_result",
+        expr="{{ redaction_quality_score.redaction_quality.score }}",
+        dtype="int",
+    )
+)
+builder.add_column(
+    dd.ExpressionColumnConfig(
+        name="redaction_quality_reasoning",
+        expr="{{ redaction_quality_score.redaction_quality.reasoning }}",
+        dtype="str",
+    )
+)
+builder.add_column(
+    dd.ExpressionColumnConfig(
+        name="document_naturalness_result",
+        expr="{{ document_naturalness_score.document_naturalness.score }}",
+        dtype="int",
+    )
+)
+builder.add_column(
+    dd.ExpressionColumnConfig(
+        name="document_naturalness_reasoning",
+        expr="{{ document_naturalness_score.document_naturalness.reasoning }}",
+        dtype="str",
+    )
+)
+
+# =========================================
+# 7.2 Column Profilers：Judge Score Profiler
+#     對 LLM-as-Judge 欄位進行深度分析，包含：
+#     - 各維度分數分布（scores, reasoning）
+#     - LLM 生成的評分模式摘要（JudgeScoreSummary）
+#     參考：https://nvidia-nemo.github.io/DataDesigner/latest/code_reference/analysis/
+# =========================================
+builder.add_profiler(
+    dd.JudgeScoreProfilerConfig(
+        model_alias=JUDGE_MODEL_ALIAS,
+        summary_score_sample_size=5,  # 每個維度取樣筆數，供 LLM 生成摘要
+    )
+)
+
+# =========================================
 # 8. 預覽（3 筆，快速驗證生成品質）
 # =========================================
 # dd_preview = dd_app.preview(builder, num_records=3)
 # dd_preview.display_sample_record()
+
 
 # # =========================================
 # 9. 大量生成（10 筆）
 # =========================================
 dd_result = dd_app.create(
     builder,
-    num_records=10,
-    dataset_name="pii-guardrails-test-dataset",
+    num_records=5,
+    dataset_name=DATASET_NAME,
 )
 
+
+def _resolve_dataset_dir(dataset_name: str) -> Path:
+    """解析最新產出的 dataset 目錄（artifacts/<name>_<timestamp>/）。"""
+    candidates = sorted(
+        (p for p in ARTIFACTS_DIR.glob(f"{dataset_name}*") if p.is_dir()),
+        key=lambda p: p.stat().st_mtime,
+        reverse=True,
+    )
+    if not candidates:
+        raise FileNotFoundError(f"找不到 artifacts 目錄: {ARTIFACTS_DIR / dataset_name}*")
+    return candidates[0]
+
+
+def _load_generated_dataframe(dataset_dir: Path) -> pd.DataFrame:
+    """載入 parquet 並合併為單一 DataFrame。"""
+    parquet_dir = dataset_dir / "parquet-files"
+    parquet_files = sorted(parquet_dir.glob("*.parquet"))
+    if not parquet_files:
+        raise FileNotFoundError(f"找不到 parquet 檔案: {parquet_dir}")
+    return pd.concat([pd.read_parquet(p) for p in parquet_files], ignore_index=True)
+
+
 # =========================================
-# 10. 載入分析報告
+# 10. 載入分析報告與匯出
+#
+# 使用方式：
+#   - to_report(save_path=None)     → 僅在 console 顯示
+#   - to_report(save_path="x.html") → 存成 HTML
+#   - to_report(save_path="x.svg")  → 存成 SVG
+#   - 資料集 CSV：generated_df.to_csv(...)
+#   - 欄位統計 CSV：從 dd_analysis.column_statistics 匯出
+#   - Judge Profiler JSON：從 dd_analysis.column_profiles 匯出
 # =========================================
 dd_analysis = dd_result.load_analysis()
-dd_analysis.to_report()
+
+# 10.1 輸出分析報告（支援 HTML / SVG）
+# - 不傳 save_path：僅在 console 顯示
+# - save_path="xxx.html"：存成 HTML
+# - save_path="xxx.svg"：存成 SVG
+dataset_dir = _resolve_dataset_dir(DATASET_NAME)
+report_dir = dataset_dir / "reports"
+report_dir.mkdir(parents=True, exist_ok=True)
+dd_analysis.to_report(save_path=report_dir / "analysis_report.html")
+# dd_analysis.to_report(save_path=report_dir / "analysis_report.svg")  # 可選
+
+# 10.2 匯出生成資料集為 CSV
+# Parquet 為 DataDesigner 預設格式，此處額外匯出 CSV 便於 Excel / 其他工具使用
+generated_df = _load_generated_dataframe(dataset_dir)
+export_dir = dataset_dir / "exports"
+export_dir.mkdir(parents=True, exist_ok=True)
+csv_path = export_dir / "pii_guardrails_dataset.csv"
+generated_df.to_csv(csv_path, index=False, encoding="utf-8-sig")
+print(f"[匯出] 資料集 CSV: {csv_path} (rows={len(generated_df)})")
+
+# 10.3 匯出欄位統計為 CSV（便於後續分析）
+# column_statistics 包含各欄位的 num_records, num_null, num_unique, token 統計等
+stats_rows = []
+for col_stat in dd_analysis.column_statistics:
+    row = {"column_name": col_stat.column_name, "column_type": col_stat.column_type}
+    if hasattr(col_stat, "num_records"):
+        row["num_records"] = col_stat.num_records
+    if hasattr(col_stat, "num_null"):
+        row["num_null"] = col_stat.num_null
+    if hasattr(col_stat, "num_unique"):
+        row["num_unique"] = col_stat.num_unique
+    if hasattr(col_stat, "input_tokens_mean"):
+        row["input_tokens_mean"] = col_stat.input_tokens_mean
+    if hasattr(col_stat, "output_tokens_mean"):
+        row["output_tokens_mean"] = col_stat.output_tokens_mean
+    stats_rows.append(row)
+stats_path = export_dir / "column_statistics.csv"
+pd.DataFrame(stats_rows).to_csv(stats_path, index=False, encoding="utf-8-sig")
+print(f"[匯出] 欄位統計 CSV: {stats_path}")
+
+# 10.4 匯出 Judge Score Profiler 結果為 JSON（含 LLM 生成的評分摘要）
+if dd_analysis.column_profiles:
+    profiles_data = []
+    for profile in dd_analysis.column_profiles:
+        if hasattr(profile, "column_name"):
+            p = {"column_name": profile.column_name}
+            if hasattr(profile, "summaries") and profile.summaries:
+                summaries_out = {}
+                for k, v in profile.summaries.items():
+                    samples = []
+                    if hasattr(v, "score_samples"):
+                        for s in v.score_samples:
+                            samples.append(
+                                s.model_dump() if hasattr(s, "model_dump") else {"score": getattr(s, "score", None), "reasoning": getattr(s, "reasoning", None)}
+                            )
+                    summaries_out[k] = {"summary": getattr(v, "summary", ""), "score_samples": samples}
+                p["summaries"] = summaries_out
+            profiles_data.append(p)
+    profiles_path = export_dir / "judge_score_profiles.json"
+    profiles_path.write_text(json.dumps(profiles_data, ensure_ascii=False, indent=2))
+    print(f"[匯出] Judge Profiler JSON: {profiles_path}")
+
+print(f"\n輸出目錄: {dataset_dir}")

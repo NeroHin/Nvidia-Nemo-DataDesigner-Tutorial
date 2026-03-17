@@ -289,6 +289,7 @@ builder.add_column(
         name="policy_compliance_score",
         model_alias=JUDGE_MODEL_ALIAS,
         prompt=policy_compliance_prompt,
+        drop=True,
         scores=[
             dd.Score(
                 name="policy_compliance",
@@ -328,6 +329,7 @@ builder.add_column(
         name="tone_appropriateness_score",
         model_alias=JUDGE_MODEL_ALIAS,
         prompt=tone_appropriateness_prompt,
+        drop=True,
         scores=[
             dd.Score(
                 name="tone_appropriateness",
@@ -367,6 +369,7 @@ builder.add_column(
         name="response_helpfulness_score",
         model_alias=JUDGE_MODEL_ALIAS,
         prompt=response_helpfulness_prompt,
+        drop=True,
         scores=[
             dd.Score(
                 name="response_helpfulness",
@@ -374,6 +377,52 @@ builder.add_column(
                 options={3: "非常有效", 2: "有效但部分缺失", 1: "效果有限", 0: "完全無效"},
             ),
         ],
+    )
+)
+
+# =========================================
+# 7.1 將 Judge 分數解析成獨立 columns（便於分析與篩選）
+# =========================================
+builder.add_column(
+    dd.ExpressionColumnConfig(
+        name="policy_compliance_result",
+        expr="{{ policy_compliance_score.policy_compliance.score }}",
+        dtype="int",
+    )
+)
+builder.add_column(
+    dd.ExpressionColumnConfig(
+        name="policy_compliance_reasoning",
+        expr="{{ policy_compliance_score.policy_compliance.reasoning }}",
+        dtype="str",
+    )
+)
+builder.add_column(
+    dd.ExpressionColumnConfig(
+        name="tone_appropriateness_result",
+        expr="{{ tone_appropriateness_score.tone_appropriateness.score }}",
+        dtype="int",
+    )
+)
+builder.add_column(
+    dd.ExpressionColumnConfig(
+        name="tone_appropriateness_reasoning",
+        expr="{{ tone_appropriateness_score.tone_appropriateness.reasoning }}",
+        dtype="str",
+    )
+)
+builder.add_column(
+    dd.ExpressionColumnConfig(
+        name="response_helpfulness_result",
+        expr="{{ response_helpfulness_score.response_helpfulness.score }}",
+        dtype="int",
+    )
+)
+builder.add_column(
+    dd.ExpressionColumnConfig(
+        name="response_helpfulness_reasoning",
+        expr="{{ response_helpfulness_score.response_helpfulness.reasoning }}",
+        dtype="str",
     )
 )
 
